@@ -1,0 +1,41 @@
+# Redraws the status banner at the top of the profile README every hour.
+# The SVG is force-pushed to a single-commit "output" branch, so main's
+# history does not grow with every run.
+name: Status banner
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["status/**", ".github/workflows/status.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: status-banner
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render banner from live data
+        run: mkdir out && python3 status/render.py out/status.svg
+
+      - name: Publish to the output branch
+        working-directory: out
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q -b output
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add status.svg
+          git commit -qm "Update status banner"
+          git push -fq "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" output
